@@ -4,12 +4,115 @@
     <meta charset="utf-8">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.rawgit.com/mp-christine/mp-christine/master/platform/assets/survey/survey_export.css">
+    <style>
+      .myInput {
+        -webkit-border-radius: 3px;
+        -moz-border-radius: 3px;
+        border-radius: 3px;
+        background-color: #f7f7f7;
+        -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);
+        -moz-box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);
+        box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);
+        -webkit-box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        box-sizing: border-box;
+        border: 1px solid #bdbdce;
+        border-bottom-color: #b1b0b9;
+        color: #747d94;
+        display: block;
+        font-family: "helvetica neue",helvetica;
+        font-size: 12px;
+        font-weight: bold;
+        text-shadow: 0 1px #eee;
+        line-height: 12px;
+        padding: 9px 12px;
+        margin: 0px 20px 0px 0px;
+        width: 200px;
+      }
+    </style>
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
+    <script src="https://cdn.rawgit.com/mp-christine/mp-christine/master/platform/assets/json2csv.js"></script>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <div class="mixpanel-platform-section">
+      <h3><a href="http://bit.ly/mp_survey_id" target="_blank">Click here for instructions to grab the survey ID</a></h3>
+      <div class="mixpanel-platform-section">
+        <input style="float: left;" class="myInput" placeholder="Enter Survey ID" id="surveySelect"/>
+        <button class="button button_primary" id="run_query">Run Query</button>
+        <div style="clear: both;"></div>
+      </div>
+      <a style="display:none;" class="button button_primary" id="csv_export" href="#">Export to CSV</a>
+    </div>
     <script>
-      // Run queries and display results here
+      var json_to_csv = new json2csv();
+      var survey_id;
+      var last_response = undefined;
+  
+         $('#run_query').on('click', function(e, survey) {
+           $('#run_query').html("Please Wait...").prop("disabled",true);
+           survey_id = $('#surveySelect').val();
+           runQuery();
+        });
+        
+       $("body").delegate( "#csv_export", "click", function() {
+            var csv = "data:text/csv;charset=utf-8," + json_to_csv.jsonToCSV(last_response);
+            $(this).attr("href", encodeURI(csv)).attr("download", 
+                  "Survey_Export_" + survey_id + "_" + moment().format('MMM-DD-YYYY') + ".csv");
+        });
+          
+        var runQuery = function() {
+          var queryParams = {
+            surveyID: survey_id
+          };
+          var script = $('#cq').html();
+          script = $.trim(script);
+          MP.api.custom_query(script, queryParams)
+          .done(function(resp) {
+                $('#run_query').html("Run Query").prop("disabled",false);
+                last_response = resp;
+                $('#csv_export').show();
+                
+            }).fail(function($xhr) {
+                $('#run_query').html("Run Query").prop("disabled",false);
+                var error = $xhr.request.responseText;
+                var error_text = "Requst failed";
+                try {
+                    error_text = JSON.parse(error).error;
+                } catch (err) {
+                    error_text = $xhr.request.responseText;
+                }
+            });
+        }
+    </script>
+    <script type="text/cq" id="cq">
+        function main() {
+          return People(
+          ).filter(function(user){
+            var isSurvey = false;
+            var surveyId = params.surveyID;
+            _.each(user.properties.$answers, function(v) {
+                if(v.$survey_id == surveyId)
+                  isSurvey = true
+            })
+            return isSurvey
+          }).map(function(user) {
+            var surveyId = params.surveyID;
+            var answers = {};
+            _.each(user.properties.$answers, function(v) {
+                if(v.$survey_id == surveyId){
+                  answers["Collection ID"] = v.$collection_id;
+                  answers["Question ID - " + v.$question_id] = v.$value;
+                }
+            })
+            return {
+              "Distinct_id": user.distinct_id,
+              "Email": user.properties.$email,
+              "city": user.properties.$city,
+              "survey": answers
+              }
+          });
+        }
     </script>
   </body>
 </html>
